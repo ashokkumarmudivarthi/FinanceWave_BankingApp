@@ -7,6 +7,7 @@ import com.financewave.auth.dto.*;
 import com.financewave.auth.service.*;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
 @RequestMapping("/auth")
@@ -20,9 +21,13 @@ public class AuthController {
 
     @Autowired
     private BlacklistService blacklistService;
+    
     @Autowired
     private OtpService otpService;
-
+    
+    @Autowired
+    private RateLimiterService rateLimiter;
+    
     // ✅ REGISTER
     @PostMapping("/register")
     public ApiResponse<UserResponse> register(@RequestBody RegisterRequest req) {
@@ -30,12 +35,27 @@ public class AuthController {
     }
 
     // ✅ LOGIN (ONLY ONE METHOD — FIXED)
-    @PostMapping("/login")
+   /* @PostMapping("/login")
     public ApiResponse<AuthResponse> login(
             @RequestBody LoginRequest req,
             HttpServletRequest request) {
 
         String ip = request.getRemoteAddr();
+
+        AuthResponse response = authService.login(req, ip);
+
+        return new ApiResponse<>("SUCCESS", "Login successful", response);
+    }*/
+    
+    @PostMapping("/login")
+    public ApiResponse<AuthResponse> login(
+            @RequestBody LoginRequest req,
+            jakarta.servlet.http.HttpServletRequest request) {
+
+        String ip = request.getRemoteAddr();
+
+        // 🚫 RATE LIMIT
+        rateLimiter.validate(ip);
 
         AuthResponse response = authService.login(req, ip);
 
@@ -66,11 +86,17 @@ public class AuthController {
     
  // ✅ SEND OTP
     @PostMapping("/forgot-password")
-    public ApiResponse<String> forgotPassword(@RequestParam String email) {
+    public ApiResponse<String> sendOtp(
+            @RequestParam String email,
+            jakarta.servlet.http.HttpServletRequest request) {
+
+        String ip = request.getRemoteAddr();
+
+        rateLimiter.validate(ip);
 
         otpService.sendOtp(email);
 
-        return new ApiResponse<>("SUCCESS", "OTP sent to email", null);
+        return new ApiResponse<>("SUCCESS", "OTP sent successfully", null);
     }
 
   /*  // ✅ RESET PASSWORD
