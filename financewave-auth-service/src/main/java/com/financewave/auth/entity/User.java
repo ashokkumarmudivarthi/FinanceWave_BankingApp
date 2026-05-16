@@ -30,6 +30,7 @@ public class User {
     private boolean accountNonLocked = true;
 
     private int failedAttempts = 0;
+    
 
     private LocalDateTime createdAt = LocalDateTime.now();
 }

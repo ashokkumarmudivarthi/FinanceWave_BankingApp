@@ -7,7 +7,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.financewave.auth.dto.*;
+import com.financewave.auth.entity.LoginAudit;
 import com.financewave.auth.entity.User;
+import com.financewave.auth.repository.LoginAuditRepository;
 import com.financewave.auth.repository.UserRepository;
 import com.financewave.auth.security.JwtUtil;
 
@@ -26,17 +28,19 @@ public class AuthService {
     @Autowired
     private RefreshTokenService refreshService;
 
+    @Autowired
+    private LoginAuditRepository auditRepo;
+
+    @Autowired
+    private OtpService otpService;
+
+    // =========================
     // ✅ REGISTER
+    // =========================
     public ApiResponse<UserResponse> register(RegisterRequest request) {
 
         if (userRepository.findByUsername(request.getUsername()).isPresent()) {
-            return new ApiResponse<UserResponse>("FAILURE", "Username already exists", null);
-        	/*return new ApiResponse<UserResponse>(
-        	        "FAILURE",
-        	        "Username already exists",
-        	        LocalDateTime.now(),
-        	        null
-        	);*/
+            return new ApiResponse<>("FAILURE", "Username already exists", null);
         }
 
         User user = new User();
@@ -63,57 +67,95 @@ public class AuthService {
                 user.getRole()
         );
 
-        return new ApiResponse<UserResponse>("SUCCESS", "User registered successfully", res);
-        /*return new ApiResponse<UserResponse>(
-                "SUCCESS",
-                "User registered successfully",
-                LocalDateTime.now(),
-                res
-        );*/
+        return new ApiResponse<>("SUCCESS", "User registered successfully", res);
     }
 
+    // =========================
     // ✅ LOGIN
-    public ApiResponse<AuthResponse> login(LoginRequest req) {
+    // =========================
+    public AuthResponse login(LoginRequest req, String ipAddress) {
 
         User user = userRepository.findByUsername(req.getUsername())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        if (!passwordEncoder.matches(req.getPassword(), user.getPassword())) {
-            return new ApiResponse<AuthResponse>("FAILURE", "Invalid credentials", null);
-        	/*return new ApiResponse<AuthResponse>(
-        	        "FAILURE",
-        	        "Invalid credentials",
-        	        LocalDateTime.now(),
-        	        null
-        	);*/
-        	
+        // 🔒 Check account lock
+        if (!user.isAccountNonLocked()) {
+            saveAudit(user.getUsername(), "ACCOUNT_LOCKED", ipAddress);
+            throw new RuntimeException("Account is locked. Contact support.");
         }
+
+        // ❌ Wrong password
+        if (!passwordEncoder.matches(req.getPassword(), user.getPassword())) {
+
+            user.setFailedAttempts(user.getFailedAttempts() + 1);
+
+            if (user.getFailedAttempts() >= 5) {
+                user.setAccountNonLocked(false);
+            }
+
+            userRepository.save(user);
+            saveAudit(user.getUsername(), "FAILURE", ipAddress);
+
+            throw new RuntimeException("Invalid credentials");
+        }
+
+        // ✅ SUCCESS LOGIN
+        user.setFailedAttempts(0);
+        userRepository.save(user);
+
+        saveAudit(user.getUsername(), "SUCCESS", ipAddress);
 
         String token = jwtUtil.generateToken(user.getUsername(), user.getRole());
         String refresh = refreshService.createRefreshToken(user.getUsername());
 
-        AuthResponse response = new AuthResponse(
-                token,
-                refresh,
-                user.getUsername(),
-                user.getRole()
-        );
-
-       // return new ApiResponse<AuthResponse>("SUCCESS", "Login successful", response);
-        return new ApiResponse<AuthResponse>(
-                "SUCCESS",
-                "Login successful",
-                LocalDateTime.now(),
-                response
-        );
+        return new AuthResponse(token, refresh, user.getUsername(), user.getRole());
     }
 
-    // ✅ GENERATE ACCESS TOKEN (FOR REFRESH)
+    // =========================
+    // ✅ GENERATE TOKEN
+    // =========================
     public String generateAccessToken(String username) {
 
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         return jwtUtil.generateToken(user.getUsername(), user.getRole());
+    }
+
+    // =========================
+    // ✅ FORGOT PASSWORD (SEND OTP)
+    // =========================
+    public void forgotPassword(String email) {
+        otpService.sendOtp(email);
+    }
+
+    // =========================
+    // ✅ RESET PASSWORD
+    // =========================
+    public void resetPassword(String email, String otp, String newPassword) {
+
+        if (!otpService.verifyOtp(email, otp)) {
+            throw new RuntimeException("Invalid or expired OTP");
+        }
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+    }
+
+    // =========================
+    // ✅ AUDIT LOGGER
+    // =========================
+    private void saveAudit(String username, String status, String ip) {
+
+        LoginAudit audit = new LoginAudit();
+        audit.setUsername(username);
+        audit.setStatus(status);
+        audit.setIpAddress(ip);
+        audit.setTimestamp(LocalDateTime.now());
+
+        auditRepo.save(audit);
     }
 }

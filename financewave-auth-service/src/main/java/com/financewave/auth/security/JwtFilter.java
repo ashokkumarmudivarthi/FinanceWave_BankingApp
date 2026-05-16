@@ -17,6 +17,8 @@ import com.financewave.auth.service.BlacklistService;
 import java.io.IOException;
 import java.util.List;
 
+
+
 @Component
 public class JwtFilter extends OncePerRequestFilter {
 
@@ -25,12 +27,22 @@ public class JwtFilter extends OncePerRequestFilter {
 
     @Autowired
     private BlacklistService blacklistService;
+    
+    
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain chain)
             throws ServletException, IOException {
+    	
+    	String path = request.getServletPath();
+
+        // ✅ BYPASS AUTH APIs
+        if (path.startsWith("/auth")) {
+            chain.doFilter(request, response);
+            return;
+        }
 
         final String authHeader = request.getHeader("Authorization");
 

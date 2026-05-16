@@ -15,7 +15,7 @@ public class SecurityConfig {
     @Autowired
     private JwtFilter jwtFilter;
 
-    @Bean
+   /* @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
         http.csrf(csrf -> csrf.disable())
@@ -29,6 +29,36 @@ public class SecurityConfig {
                 .requestMatchers("/api/employee/**").hasRole("EMPLOYEE")
                 .anyRequest().authenticated()
             )
+            .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+
+        return http.build();
+    }*/
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+
+        http
+            .csrf(csrf -> csrf.disable())
+
+            .authorizeHttpRequests(auth -> auth
+                // ✅ PUBLIC APIs (VERY IMPORTANT)
+                .requestMatchers(
+                    "/auth/register",
+                    "/auth/login",
+                    "/auth/refresh",
+                    "/auth/logout",
+                    "/auth/forgot-password",
+                    "/auth/reset-password"
+                ).permitAll()
+
+                // ✅ ROLE BASED
+                .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                .requestMatchers("/api/user/**").hasAnyRole("USER", "ADMIN")
+                .requestMatchers("/api/employee/**").hasRole("EMPLOYEE")
+
+                // ✅ EVERYTHING ELSE
+                .anyRequest().authenticated()
+            )
+
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

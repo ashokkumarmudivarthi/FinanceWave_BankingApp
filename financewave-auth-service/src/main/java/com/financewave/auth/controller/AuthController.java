@@ -6,6 +6,8 @@ import org.springframework.web.bind.annotation.*;
 import com.financewave.auth.dto.*;
 import com.financewave.auth.service.*;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
@@ -18,6 +20,8 @@ public class AuthController {
 
     @Autowired
     private BlacklistService blacklistService;
+    @Autowired
+    private OtpService otpService;
 
     // ✅ REGISTER
     @PostMapping("/register")
@@ -25,24 +29,25 @@ public class AuthController {
         return authService.register(req);
     }
 
-    // ✅ LOGIN
+    // ✅ LOGIN (ONLY ONE METHOD — FIXED)
     @PostMapping("/login")
-    public ApiResponse<AuthResponse> login(@RequestBody LoginRequest req) {
-        return authService.login(req);
+    public ApiResponse<AuthResponse> login(
+            @RequestBody LoginRequest req,
+            HttpServletRequest request) {
+
+        String ip = request.getRemoteAddr();
+
+        AuthResponse response = authService.login(req, ip);
+
+        return new ApiResponse<>("SUCCESS", "Login successful", response);
     }
 
-    // ✅ REFRESH TOKEN
+    // ✅ REFRESH
     @PostMapping("/refresh")
     public ApiResponse<AuthResponse> refresh(@RequestParam String refreshToken) {
 
         if (!refreshService.validate(refreshToken)) {
-            return new ApiResponse<AuthResponse>("FAILURE", "Invalid refresh token", null);
-        	/*return new ApiResponse<AuthResponse>(
-        	        "FAILURE",
-        	        "Invalid refresh token",
-        	        java.time.LocalDateTime.now(),
-        	        null
-        	);*/
+            return new ApiResponse<>("FAILURE", "Invalid refresh token", null);
         }
 
         String username = refreshService.getUsername(refreshToken);
@@ -55,32 +60,43 @@ public class AuthController {
                 "REFRESHED"
         );
 
-        //return new ApiResponse<AuthResponse>("SUCCESS", "Token refreshed successfully", response);
-        return new ApiResponse<AuthResponse>(
-                "SUCCESS",
-                "Token refreshed successfully",
-                java.time.LocalDateTime.now(),
-                response
-        );
-    }
-   /* 
-    @GetMapping("/user/profile")
-    public ApiResponse<UserResponse> getProfile() {
-
-        UserResponse user = new UserResponse("admin", "admin@test.com", "ADMIN");
-
-        return new ApiResponse<>("SUCCESS", "Profile fetched", user);
+        return new ApiResponse<>("SUCCESS", "Token refreshed successfully", response);
     }
     
-    @GetMapping("/admin/dashboard")
-    public ApiResponse<String> dashboard() {
-        return new ApiResponse<>("SUCCESS", "Dashboard loaded", "Admin Dashboard Data");
-    }
     
-    @GetMapping("/api/secure")
-    public ApiResponse<String> secure() {
-        return new ApiResponse<>("SUCCESS", "Secure API accessed", "Authorized");
+ // ✅ SEND OTP
+    @PostMapping("/forgot-password")
+    public ApiResponse<String> forgotPassword(@RequestParam String email) {
+
+        otpService.sendOtp(email);
+
+        return new ApiResponse<>("SUCCESS", "OTP sent to email", null);
+    }
+
+  /*  // ✅ RESET PASSWORD
+    @PostMapping("/reset-password")
+    public ApiResponse<String> resetPassword(
+            @RequestParam String email,
+            @RequestParam String otp,
+            @RequestParam String newPassword) {
+
+        authService.resetPassword(email, otp, newPassword);
+
+        return new ApiResponse<>("SUCCESS", "Password reset successful", null);
     }*/
+    
+    @PostMapping("/reset-password")
+    public ApiResponse<String> resetPassword(
+            @RequestBody ResetPasswordRequest request) {
+
+        authService.resetPassword(
+                request.getEmail(),
+                request.getOtp(),
+                request.getNewPassword()
+        );
+
+        return new ApiResponse<>("SUCCESS", "Password reset successful", null);
+    }
 
     // ✅ LOGOUT
     @PostMapping("/logout")
@@ -90,11 +106,5 @@ public class AuthController {
         blacklistService.blacklist(token);
 
         return new ApiResponse<>("SUCCESS", "Logged out successfully", null);
-        /*return new ApiResponse<String>(
-                "SUCCESS",
-                "Logged out successfully",
-                java.time.LocalDateTime.now(),
-                null
-        );*/
     }
 }
