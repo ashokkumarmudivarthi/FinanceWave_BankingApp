@@ -38,6 +38,13 @@ public class AuthService {
     
     @Autowired
     private PasswordHistoryRepository passwordHistoryRepo;
+    
+    @Autowired
+    private SessionService sessionService;
+    
+    
+    
+   
 
     // =========================
     // ✅ REGISTER
@@ -119,6 +126,9 @@ public class AuthService {
 
         String token = jwtUtil.generateToken(user.getUsername(), user.getRole());
         String refresh = refreshService.createRefreshToken(user.getUsername());
+        
+     // ✅ CREATE SESSION
+        sessionService.createSession(user.getUsername(), token, ipAddress);
 
         return new AuthResponse(token, refresh, user.getUsername(), user.getRole());
     }
@@ -203,4 +213,46 @@ public class AuthService {
 
         return new ApiResponse<>("SUCCESS", "User unlocked successfully", null);
     }
+    
+ // ✅ CHANGE PASSWORD
+    public void changePassword(ChangePasswordRequest req) {
+
+        User user = userRepository.findByUsername(req.getUsername())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (!passwordEncoder.matches(req.getOldPassword(), user.getPassword())) {
+            throw new RuntimeException("Old password is incorrect");
+        }
+
+        user.setPassword(passwordEncoder.encode(req.getNewPassword()));
+        userRepository.save(user);
+    }
+    
+ // ✅ VERIFY OTP (OPTIONAL)
+    public void verifyOtp(String email, String otp) {
+
+        if (!otpService.verifyOtp(email, otp)) {
+            throw new RuntimeException("Invalid OTP");
+        }
+    }
+    
+ // ✅ RESEND OTP
+    public void resendOtp(String email) {
+        otpService.sendOtp(email);
+    }
+    
+ // ✅ GET ACTIVE SESSIONS
+  
+
+    public Object getSessions(String username) {
+        return sessionService.getActiveSessions(username);
+    }
+    
+ // ✅ GET AUDIT LOGS
+  
+
+    public Object getAuditLogs(String username) {
+        return auditRepo.findByUsername(username);
+    }
+    
 }

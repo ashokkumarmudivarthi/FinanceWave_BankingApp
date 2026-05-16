@@ -55,6 +55,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/user/**").hasAnyRole("USER", "ADMIN")
                 .requestMatchers("/api/employee/**").hasRole("EMPLOYEE")
                 .requestMatchers("/auth/admin/**").hasRole("ADMIN")
+                .requestMatchers("/auth/resend-otp", "/auth/verify-otp").permitAll()
 
                 // ✅ EVERYTHING ELSE
                 .anyRequest().authenticated()

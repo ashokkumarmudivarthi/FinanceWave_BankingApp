@@ -28,6 +28,9 @@ public class AuthController {
     @Autowired
     private RateLimiterService rateLimiter;
     
+    @Autowired
+    private SessionService sessionService;
+    
     // ✅ REGISTER
     @PostMapping("/register")
     public ApiResponse<UserResponse> register(@RequestBody RegisterRequest req) {
@@ -134,8 +137,53 @@ public class AuthController {
     public ApiResponse<String> logout(@RequestHeader("Authorization") String header) {
 
         String token = header.substring(7);
+
         blacklistService.blacklist(token);
+        sessionService.invalidateSession(token);
 
         return new ApiResponse<>("SUCCESS", "Logged out successfully", null);
     }
+    
+    @PostMapping("/logout-all")
+    public ApiResponse<String> logoutAll(@RequestParam String username) {
+
+        sessionService.invalidateAllSessions(username);
+
+        return new ApiResponse<>("SUCCESS", "All sessions logged out", null);
+    }
+    
+    @PostMapping("/resend-otp")
+    public ApiResponse<String> resendOtp(@RequestParam String email) {
+
+        authService.resendOtp(email);
+
+        return new ApiResponse<>("SUCCESS", "OTP resent successfully", null);
+    }
+    
+    @PostMapping("/change-password")
+    public ApiResponse<String> changePassword(
+            @RequestBody ChangePasswordRequest req) {
+
+        authService.changePassword(req);
+
+        return new ApiResponse<>("SUCCESS", "Password changed successfully", null);
+    }
+    
+    @PostMapping("/verify-otp")
+    public ApiResponse<String> verifyOtp(@RequestBody VerifyOtpRequest req) {
+
+        authService.verifyOtp(req.getEmail(), req.getOtp());
+
+        return new ApiResponse<>("SUCCESS", "OTP verified successfully", null);
+    }
+    
+    @GetMapping("/sessions")
+    public ApiResponse<Object> sessions(@RequestParam String username) {
+
+        Object data = authService.getSessions(username);
+
+        return new ApiResponse<>("SUCCESS", "Active sessions fetched", data);
+    }
+    
+    
 }

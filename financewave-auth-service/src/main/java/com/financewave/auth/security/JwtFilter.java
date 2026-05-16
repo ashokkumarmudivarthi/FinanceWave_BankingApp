@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import com.financewave.auth.service.BlacklistService;
+import com.financewave.auth.service.SessionService;
 
 import java.io.IOException;
 import java.util.List;
@@ -28,6 +29,9 @@ public class JwtFilter extends OncePerRequestFilter {
     @Autowired
     private BlacklistService blacklistService;
     
+    @Autowired
+    private SessionService sessionService;
+    
     
 
     @Override
@@ -37,17 +41,24 @@ public class JwtFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
     	
     	String path = request.getServletPath();
+    	
+    	
 
         // ✅ BYPASS AUTH APIs
         if (path.startsWith("/auth")) {
             chain.doFilter(request, response);
             return;
         }
-
+        
         final String authHeader = request.getHeader("Authorization");
 
         String username = null;
         String token = null;
+        
+     // ❌ BLOCK IF SESSION INVALID
+    	if (!sessionService.isSessionValid(token)) {
+    	    return;
+    	}
 
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             token = authHeader.substring(7);
