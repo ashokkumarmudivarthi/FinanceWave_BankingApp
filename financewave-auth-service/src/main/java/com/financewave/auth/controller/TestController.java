@@ -15,4 +15,13 @@ public class TestController {
     public String admin() {
         return "Admin Dashboard Access";
     }
+    @GetMapping("/user/profile")
+    public String user() {
+        return "User Profile";
+    }
+
+    @GetMapping("/employee/data")
+    public String employee() {
+        return "Employee Data";
+    }
 }

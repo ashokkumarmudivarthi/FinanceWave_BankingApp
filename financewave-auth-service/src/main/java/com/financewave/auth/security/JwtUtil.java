@@ -51,4 +51,24 @@ public class JwtUtil {
             return false;
         }
     }
+    
+    public String generateToken(String username, String role) {
+
+        return Jwts.builder()
+                .setSubject(username)
+                .claim("role", role)   //  ADD ROLE
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + expiration))
+                .signWith(getSigningKey())
+                .compact();
+    }
+    public String extractRole(String token) {
+
+        return Jwts.parserBuilder()
+                .setSigningKey(getSigningKey())
+                .build()
+                .parseClaimsJws(token)
+                .getBody()
+                .get("role", String.class);
+    }
 }
