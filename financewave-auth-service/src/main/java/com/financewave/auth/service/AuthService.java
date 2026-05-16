@@ -8,8 +8,10 @@ import org.springframework.stereotype.Service;
 
 import com.financewave.auth.dto.*;
 import com.financewave.auth.entity.LoginAudit;
+import com.financewave.auth.entity.PasswordHistory;
 import com.financewave.auth.entity.User;
 import com.financewave.auth.repository.LoginAuditRepository;
+import com.financewave.auth.repository.PasswordHistoryRepository;
 import com.financewave.auth.repository.UserRepository;
 import com.financewave.auth.security.JwtUtil;
 
@@ -33,6 +35,9 @@ public class AuthService {
 
     @Autowired
     private OtpService otpService;
+    
+    @Autowired
+    private PasswordHistoryRepository passwordHistoryRepo;
 
     // =========================
     // ✅ REGISTER
@@ -60,6 +65,13 @@ public class AuthService {
         user.setCreatedAt(LocalDateTime.now());
 
         userRepository.save(user);
+        
+        PasswordHistory ph = new PasswordHistory();
+        ph.setUsername(user.getUsername());
+        ph.setPassword(user.getPassword());
+        ph.setChangedAt(LocalDateTime.now());
+
+        passwordHistoryRepo.save(ph);
 
         UserResponse res = new UserResponse(
                 user.getUsername(),
@@ -141,8 +153,27 @@ public class AuthService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
+        // 🔒 PASSWORD HISTORY CHECK
+        var historyList = passwordHistoryRepo
+                .findTop3ByUsernameOrderByChangedAtDesc(user.getUsername());
+
+        for (PasswordHistory old : historyList) {
+            if (passwordEncoder.matches(newPassword, old.getPassword())) {
+                throw new RuntimeException("You cannot reuse last 3 passwords");
+            }
+        }
+
+        // ✅ SAVE NEW PASSWORD
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
+
+        // ✅ SAVE HISTORY
+        PasswordHistory ph = new PasswordHistory();
+        ph.setUsername(user.getUsername());
+        ph.setPassword(user.getPassword());
+        ph.setChangedAt(LocalDateTime.now());
+
+        passwordHistoryRepo.save(ph);
     }
 
     // =========================
