@@ -158,4 +158,18 @@ public class AuthService {
 
         auditRepo.save(audit);
     }
+    
+    
+    public ApiResponse<String> unlockUser(String username) {
+
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        user.setAccountNonLocked(true);
+        user.setFailedAttempts(0);
+
+        userRepository.save(user);
+
+        return new ApiResponse<>("SUCCESS", "User unlocked successfully", null);
+    }
 }

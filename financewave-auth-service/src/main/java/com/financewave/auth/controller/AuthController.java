@@ -97,6 +97,11 @@ public class AuthController {
 
         return new ApiResponse<>("SUCCESS", "Password reset successful", null);
     }
+    
+    @PostMapping("/admin/unlock")
+    public ApiResponse<String> unlockUser(@RequestParam String username) {
+        return authService.unlockUser(username);
+    }
 
     // ✅ LOGOUT
     @PostMapping("/logout")
