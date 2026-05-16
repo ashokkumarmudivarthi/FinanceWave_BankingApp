@@ -1,0 +1,24 @@
+/.metadata/
+# Java
+target/
+*.class
+*.log
+
+# Eclipse
+.project
+.classpath
+.settings/
+
+# IntelliJ
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+
+# Env
+.env
