@@ -1,14 +1,13 @@
 package com.financewave.auth.dto;
 
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Data;
 
 @Data
 @AllArgsConstructor
-@NoArgsConstructor
-@Builder
 public class UserResponse {
 
-    private Long userId;
     private String username;
+    private String email;
     private String role;
 }

@@ -12,6 +12,8 @@ import org.springframework.security.web.authentication.WebAuthenticationDetailsS
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import com.financewave.auth.service.BlacklistService;
+
 import java.io.IOException;
 import java.util.List;
 
@@ -20,6 +22,9 @@ public class JwtFilter extends OncePerRequestFilter {
 
     @Autowired
     private JwtUtil jwtUtil;
+
+    @Autowired
+    private BlacklistService blacklistService;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -35,25 +40,34 @@ public class JwtFilter extends OncePerRequestFilter {
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             token = authHeader.substring(7);
 
+            // ✅ FIRST: Check blacklist
+            if (blacklistService.isBlacklisted(token)) {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                return;
+            }
+
             try {
                 username = jwtUtil.extractUsername(token);
             } catch (Exception e) {
-                // ignore invalid token
+                // invalid token
             }
         }
 
+        // ✅ Authentication
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
 
             if (jwtUtil.validateToken(token)) {
 
-            	String role = jwtUtil.extractRole(token);
+                String role = jwtUtil.extractRole(token);
 
-            	UsernamePasswordAuthenticationToken authToken =
-            	        new UsernamePasswordAuthenticationToken(
-            	                username,
-            	                null,
-            	                List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_" + role))
-            	        );
+                UsernamePasswordAuthenticationToken authToken =
+                        new UsernamePasswordAuthenticationToken(
+                                username,
+                                null,
+                                List.of(
+                                    new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_" + role)
+                                )
+                        );
 
                 authToken.setDetails(
                         new WebAuthenticationDetailsSource().buildDetails(request)
@@ -61,9 +75,9 @@ public class JwtFilter extends OncePerRequestFilter {
 
                 SecurityContextHolder.getContext().setAuthentication(authToken);
             }
-        
         }
 
+        // ✅ Continue chain ALWAYS
         chain.doFilter(request, response);
     }
 }
