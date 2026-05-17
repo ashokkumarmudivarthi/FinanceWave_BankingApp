@@ -28,10 +28,6 @@ public class AccountService {
 
         String username = jwtUtil.extractUsername(token);
 
-        // ✅ DEBUG (VERY IMPORTANT)
-        System.out.println("Initial Balance: " + req.getInitialBalance());
-
-        // ✅ FIXED FIELD NAME
         if (req.getInitialBalance() < 1000) {
             throw new RuntimeException("Minimum balance 1000 required");
         }
@@ -46,16 +42,13 @@ public class AccountService {
 
         repo.save(acc);
 
-        return new ApiResponse<>(
-                "SUCCESS",
-                "Account created",
+        return new ApiResponse<>("SUCCESS", "Account created",
                 new AccountResponse(
                         acc.getAccountNumber(),
                         acc.getAccountType(),
                         acc.getBalance(),
                         acc.getStatus()
-                )
-        );
+                ));
     }
 
     // =========================
@@ -75,5 +68,104 @@ public class AccountService {
                 .collect(Collectors.toList());
 
         return new ApiResponse<>("SUCCESS", "Accounts fetched", list);
+    }
+
+    // =========================
+    // GET ACCOUNT DETAILS
+    // =========================
+    public ApiResponse<AccountDetailsResponse> getAccount(String token, String accNo) {
+
+        String username = jwtUtil.extractUsername(token);
+
+        Account acc = repo.findByAccountNumber(accNo)
+                .orElseThrow(() -> new RuntimeException("Account not found"));
+
+        if (!acc.getUsername().equals(username)) {
+            throw new RuntimeException("Unauthorized access");
+        }
+
+        return new ApiResponse<>("SUCCESS", "Account details",
+                new AccountDetailsResponse(
+                        acc.getAccountNumber(),
+                        acc.getAccountType(),
+                        acc.getBalance(),
+                        acc.getStatus(),
+                        acc.getCreatedAt()
+                ));
+    }
+
+    // =========================
+    // ADMIN - GET ALL ACCOUNTS
+    // =========================
+    public ApiResponse<List<AccountDetailsResponse>> getAllAccounts() {
+
+        List<AccountDetailsResponse> list = repo.findAll()
+                .stream()
+                .map(a -> new AccountDetailsResponse(
+                        a.getAccountNumber(),
+                        a.getAccountType(),
+                        a.getBalance(),
+                        a.getStatus(),
+                        a.getCreatedAt()))
+                .collect(Collectors.toList());
+
+        return new ApiResponse<>("SUCCESS", "All accounts", list);
+    }
+
+    // =========================
+    // BLOCK ACCOUNT
+    // =========================
+    public ApiResponse<String> block(String accNo) {
+
+        Account acc = repo.findByAccountNumber(accNo)
+                .orElseThrow(() -> new RuntimeException("Account not found"));
+
+        acc.setStatus("BLOCKED");
+        repo.save(acc);
+
+        return new ApiResponse<>("SUCCESS", "Account blocked", null);
+    }
+
+    // =========================
+    // UNBLOCK ACCOUNT
+    // =========================
+    public ApiResponse<String> unblock(String accNo) {
+
+        Account acc = repo.findByAccountNumber(accNo)
+                .orElseThrow(() -> new RuntimeException("Account not found"));
+
+        acc.setStatus("ACTIVE");
+        repo.save(acc);
+
+        return new ApiResponse<>("SUCCESS", "Account unblocked", null);
+    }
+
+    // =========================
+    // CLOSE ACCOUNT
+    // =========================
+    public ApiResponse<String> close(String accNo) {
+
+        Account acc = repo.findByAccountNumber(accNo)
+                .orElseThrow(() -> new RuntimeException("Account not found"));
+
+        if (acc.getBalance() > 0) {
+            throw new RuntimeException("Balance must be zero to close account");
+        }
+
+        acc.setStatus("CLOSED");
+        repo.save(acc);
+
+        return new ApiResponse<>("SUCCESS", "Account closed", null);
+    }
+
+    // =========================
+    // VALIDATE ACCOUNT (INTERNAL)
+    // =========================
+    public boolean validateAccount(String accNo) {
+
+        Account acc = repo.findByAccountNumber(accNo)
+                .orElseThrow(() -> new RuntimeException("Account not found"));
+
+        return "ACTIVE".equals(acc.getStatus());
     }
 }
