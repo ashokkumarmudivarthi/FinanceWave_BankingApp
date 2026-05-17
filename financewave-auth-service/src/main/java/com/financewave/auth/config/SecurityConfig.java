@@ -40,24 +40,32 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
 
             .authorizeHttpRequests(auth -> auth
-                // ✅ PUBLIC APIs (VERY IMPORTANT)
+
+                // ✅ PUBLIC APIs
                 .requestMatchers(
                     "/auth/register",
                     "/auth/login",
                     "/auth/refresh",
-                    "/auth/logout",
                     "/auth/forgot-password",
-                    "/auth/reset-password"
+                    "/auth/reset-password",
+                    "/auth/send-otp",
+                    "/auth/resend-otp",
+                    "/auth/verify-otp"
                 ).permitAll()
 
-                // ✅ ROLE BASED
+                // ✅ SELF LOGOUT
+                .requestMatchers("/auth/logout").authenticated()
+                .requestMatchers("/auth/logout-all").authenticated()
+
+                // ✅ ADMIN CONTROL APIs
+                .requestMatchers("/auth/admin/**").hasRole("ADMIN")
+
+                // ✅ BUSINESS APIs
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/user/**").hasAnyRole("USER", "ADMIN")
                 .requestMatchers("/api/employee/**").hasRole("EMPLOYEE")
-                .requestMatchers("/auth/admin/**").hasRole("ADMIN")
-                .requestMatchers("/auth/resend-otp", "/auth/verify-otp").permitAll()
 
-                // ✅ EVERYTHING ELSE
+                // ✅ DEFAULT
                 .anyRequest().authenticated()
             )
 

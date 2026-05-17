@@ -1,5 +1,6 @@
 package com.financewave.auth.service;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -9,8 +10,13 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class RateLimiterService {
 
-    private static final int MAX_REQUESTS = 5;      // limit
-    private static final int BLOCK_MINUTES = 5;     // block duration
+    // 🔧 CONFIG FROM application.properties
+    @Value("${rate.limit.maxRequests}")
+    private int maxRequests;
+
+    @Value("${rate.limit.blockMinutes}")
+    private int blockMinutes;
+    
 
     private final Map<String, Integer> requestCounts = new ConcurrentHashMap<>();
     private final Map<String, LocalDateTime> blockTime = new ConcurrentHashMap<>();
@@ -22,10 +28,10 @@ public class RateLimiterService {
 
             LocalDateTime blockedAt = blockTime.get(ip);
 
-            if (blockedAt.plusMinutes(BLOCK_MINUTES).isAfter(LocalDateTime.now())) {
-                throw new RuntimeException("Too many requests. Try again later.");
+            if (blockedAt.plusMinutes(blockMinutes).isAfter(LocalDateTime.now())) {
+                throw new RuntimeException("Too many requests. IP blocked for " + blockMinutes + " minutes.");
             } else {
-                // unblock after time
+                // ✅ Unblock after time
                 blockTime.remove(ip);
                 requestCounts.remove(ip);
             }
@@ -36,9 +42,17 @@ public class RateLimiterService {
         requestCounts.put(ip, count);
 
         // 🚫 Block if exceeded
-        if (count > MAX_REQUESTS) {
+        if (count > maxRequests) {
             blockTime.put(ip, LocalDateTime.now());
-            throw new RuntimeException("Too many requests. IP blocked for 5 minutes.");
+            throw new RuntimeException("Too many requests. IP blocked for " + blockMinutes + " minutes.");
         }
     }
+
+    // 🧪 DEV ONLY (optional helper)
+    public void reset() {
+        requestCounts.clear();
+        blockTime.clear();
+    }
+    
+    
 }

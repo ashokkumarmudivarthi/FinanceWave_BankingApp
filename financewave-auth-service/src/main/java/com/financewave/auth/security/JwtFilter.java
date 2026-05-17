@@ -18,8 +18,6 @@ import com.financewave.auth.service.SessionService;
 import java.io.IOException;
 import java.util.List;
 
-
-
 @Component
 public class JwtFilter extends OncePerRequestFilter {
 
@@ -28,43 +26,49 @@ public class JwtFilter extends OncePerRequestFilter {
 
     @Autowired
     private BlacklistService blacklistService;
-    
+
     @Autowired
     private SessionService sessionService;
-    
-    
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain chain)
             throws ServletException, IOException {
-    	
-    	String path = request.getServletPath();
-    	
-    	
 
-        // ✅ BYPASS AUTH APIs
-        if (path.startsWith("/auth")) {
+        String path = request.getServletPath();
+
+        // ✅ BYPASS ONLY PUBLIC AUTH APIs
+        if (path.equals("/auth/login") ||
+            path.equals("/auth/register") ||
+            path.equals("/auth/refresh") ||
+            path.equals("/auth/forgot-password") ||
+            path.equals("/auth/reset-password") ||
+            path.equals("/auth/send-otp") ||
+            path.equals("/auth/resend-otp") ||
+            path.equals("/auth/verify-otp")) {
+
             chain.doFilter(request, response);
             return;
         }
-        
+
         final String authHeader = request.getHeader("Authorization");
 
         String username = null;
         String token = null;
-        
-     // ❌ BLOCK IF SESSION INVALID
-    	if (!sessionService.isSessionValid(token)) {
-    	    return;
-    	}
 
+        // ✅ Extract token
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             token = authHeader.substring(7);
 
-            // ✅ FIRST: Check blacklist
+            // ❌ BLOCK BLACKLISTED TOKEN
             if (blacklistService.isBlacklisted(token)) {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                return;
+            }
+
+            // ❌ BLOCK INVALID SESSION
+            if (!sessionService.isSessionValid(token)) {
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 return;
             }
@@ -72,11 +76,16 @@ public class JwtFilter extends OncePerRequestFilter {
             try {
                 username = jwtUtil.extractUsername(token);
             } catch (Exception e) {
-                // invalid token
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                return;
             }
+        } else {
+            // ❌ No token → block
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            return;
         }
 
-        // ✅ Authentication
+        // ✅ SET AUTHENTICATION
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
 
             if (jwtUtil.validateToken(token)) {
@@ -88,7 +97,7 @@ public class JwtFilter extends OncePerRequestFilter {
                                 username,
                                 null,
                                 List.of(
-                                    new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_" + role)
+                                        new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_" + role)
                                 )
                         );
 
@@ -100,7 +109,7 @@ public class JwtFilter extends OncePerRequestFilter {
             }
         }
 
-        // ✅ Continue chain ALWAYS
+        // ✅ Continue filter chain
         chain.doFilter(request, response);
     }
 }

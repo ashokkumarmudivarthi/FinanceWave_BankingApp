@@ -5,8 +5,8 @@ import org.springframework.web.bind.annotation.*;
 
 import com.financewave.auth.dto.*;
 import com.financewave.auth.service.*;
+import com.financewave.auth.security.JwtUtil;
 
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
@@ -21,43 +21,37 @@ public class AuthController {
 
     @Autowired
     private BlacklistService blacklistService;
-    
+
     @Autowired
     private OtpService otpService;
-    
+
     @Autowired
     private RateLimiterService rateLimiter;
-    
+
     @Autowired
     private SessionService sessionService;
-    
+
+    @Autowired
+    private JwtUtil jwtUtil;
+
+    // =========================
     // ✅ REGISTER
+    // =========================
     @PostMapping("/register")
     public ApiResponse<UserResponse> register(@RequestBody RegisterRequest req) {
         return authService.register(req);
     }
 
-    // ✅ LOGIN (ONLY ONE METHOD — FIXED)
-   /* @PostMapping("/login")
+    // =========================
+    // ✅ LOGIN
+    // =========================
+    @PostMapping("/login")
     public ApiResponse<AuthResponse> login(
             @RequestBody LoginRequest req,
             HttpServletRequest request) {
 
         String ip = request.getRemoteAddr();
 
-        AuthResponse response = authService.login(req, ip);
-
-        return new ApiResponse<>("SUCCESS", "Login successful", response);
-    }*/
-    
-    @PostMapping("/login")
-    public ApiResponse<AuthResponse> login(
-            @RequestBody LoginRequest req,
-            jakarta.servlet.http.HttpServletRequest request) {
-
-        String ip = request.getRemoteAddr();
-
-        // 🚫 RATE LIMIT
         rateLimiter.validate(ip);
 
         AuthResponse response = authService.login(req, ip);
@@ -65,7 +59,9 @@ public class AuthController {
         return new ApiResponse<>("SUCCESS", "Login successful", response);
     }
 
-    // ✅ REFRESH
+    // =========================
+    // ✅ REFRESH TOKEN
+    // =========================
     @PostMapping("/refresh")
     public ApiResponse<AuthResponse> refresh(@RequestParam String refreshToken) {
 
@@ -85,13 +81,14 @@ public class AuthController {
 
         return new ApiResponse<>("SUCCESS", "Token refreshed successfully", response);
     }
-    
-    
- // ✅ SEND OTP
+
+    // =========================
+    // ✅ FORGOT PASSWORD (SEND OTP)
+    // =========================
     @PostMapping("/forgot-password")
     public ApiResponse<String> sendOtp(
             @RequestParam String email,
-            jakarta.servlet.http.HttpServletRequest request) {
+            HttpServletRequest request) {
 
         String ip = request.getRemoteAddr();
 
@@ -102,21 +99,39 @@ public class AuthController {
         return new ApiResponse<>("SUCCESS", "OTP sent successfully", null);
     }
 
-  /*  // ✅ RESET PASSWORD
-    @PostMapping("/reset-password")
-    public ApiResponse<String> resetPassword(
+    // =========================
+    // ✅ RESEND OTP
+    // =========================
+    @PostMapping("/resend-otp")
+    public ApiResponse<String> resendOtp(
             @RequestParam String email,
-            @RequestParam String otp,
-            @RequestParam String newPassword) {
+            HttpServletRequest request) {
 
-        authService.resetPassword(email, otp, newPassword);
+        String ip = request.getRemoteAddr();
 
-        return new ApiResponse<>("SUCCESS", "Password reset successful", null);
-    }*/
-    
+        rateLimiter.validate(ip);
+
+        otpService.sendOtp(email);
+
+        return new ApiResponse<>("SUCCESS", "OTP resent successfully", null);
+    }
+
+    // =========================
+    // ✅ VERIFY OTP
+    // =========================
+    @PostMapping("/verify-otp")
+    public ApiResponse<String> verifyOtp(@RequestBody VerifyOtpRequest req) {
+
+        authService.verifyOtp(req.getEmail(), req.getOtp());
+
+        return new ApiResponse<>("SUCCESS", "OTP verified successfully", null);
+    }
+
+    // =========================
+    // ✅ RESET PASSWORD
+    // =========================
     @PostMapping("/reset-password")
-    public ApiResponse<String> resetPassword(
-            @RequestBody ResetPasswordRequest request) {
+    public ApiResponse<String> resetPassword(@RequestBody ResetPasswordRequest request) {
 
         authService.resetPassword(
                 request.getEmail(),
@@ -126,13 +141,34 @@ public class AuthController {
 
         return new ApiResponse<>("SUCCESS", "Password reset successful", null);
     }
-    
+
+    // =========================
+    // ✅ CHANGE PASSWORD (LOGGED IN USER)
+    // =========================
+    @PostMapping("/change-password")
+    public ApiResponse<String> changePassword(
+            @RequestBody ChangePasswordRequest req,
+            @RequestHeader("Authorization") String header) {
+
+        String token = header.substring(7);
+        String username = jwtUtil.extractUsername(token);
+
+        authService.changePassword(req);
+
+        return new ApiResponse<>("SUCCESS", "Password changed successfully", null);
+    }
+
+    // =========================
+    // ✅ ADMIN UNLOCK USER
+    // =========================
     @PostMapping("/admin/unlock")
     public ApiResponse<String> unlockUser(@RequestParam String username) {
         return authService.unlockUser(username);
     }
 
-    // ✅ LOGOUT
+    // =========================
+    // ✅ LOGOUT (SINGLE SESSION)
+    // =========================
     @PostMapping("/logout")
     public ApiResponse<String> logout(@RequestHeader("Authorization") String header) {
 
@@ -143,47 +179,43 @@ public class AuthController {
 
         return new ApiResponse<>("SUCCESS", "Logged out successfully", null);
     }
-    
+
+    // =========================
+    // ✅ LOGOUT ALL (SELF)
+    // =========================
     @PostMapping("/logout-all")
-    public ApiResponse<String> logoutAll(@RequestParam String username) {
+    public ApiResponse<String> logoutAll(HttpServletRequest request) {
+
+        String token = request.getHeader("Authorization").substring(7);
+        String username = jwtUtil.extractUsername(token);
 
         sessionService.invalidateAllSessions(username);
 
         return new ApiResponse<>("SUCCESS", "All sessions logged out", null);
     }
-    
-    @PostMapping("/resend-otp")
-    public ApiResponse<String> resendOtp(@RequestParam String email) {
 
-        authService.resendOtp(email);
+    // =========================
+    // ✅ ADMIN FORCE LOGOUT
+    // =========================
+    @PostMapping("/admin/logout-all")
+    public ApiResponse<String> adminLogoutAll(@RequestParam String username) {
 
-        return new ApiResponse<>("SUCCESS", "OTP resent successfully", null);
+        sessionService.invalidateAllSessions(username);
+
+        return new ApiResponse<>("SUCCESS", "User sessions terminated by admin", null);
     }
-    
-    @PostMapping("/change-password")
-    public ApiResponse<String> changePassword(
-            @RequestBody ChangePasswordRequest req) {
 
-        authService.changePassword(req);
-
-        return new ApiResponse<>("SUCCESS", "Password changed successfully", null);
-    }
-    
-    @PostMapping("/verify-otp")
-    public ApiResponse<String> verifyOtp(@RequestBody VerifyOtpRequest req) {
-
-        authService.verifyOtp(req.getEmail(), req.getOtp());
-
-        return new ApiResponse<>("SUCCESS", "OTP verified successfully", null);
-    }
-    
+    // =========================
+    // ✅ VIEW OWN SESSIONS
+    // =========================
     @GetMapping("/sessions")
-    public ApiResponse<Object> sessions(@RequestParam String username) {
+    public ApiResponse<Object> mySessions(HttpServletRequest request) {
+
+        String token = request.getHeader("Authorization").substring(7);
+        String username = jwtUtil.extractUsername(token);
 
         Object data = authService.getSessions(username);
 
         return new ApiResponse<>("SUCCESS", "Active sessions fetched", data);
     }
-    
-    
 }
