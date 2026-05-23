@@ -6,6 +6,7 @@ import com.financewave.transaction.service.TransactionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
@@ -58,13 +59,76 @@ public class TransactionController {
 
         return service.history(accountNumber, header.substring(7));
     }
- // =========================
- // GET TRANSACTION STATUS
- // =========================
- @GetMapping("/status/{txnId}")
- public ApiResponse<TransactionResponse> getTransaction(
-         @PathVariable String txnId) {
 
-     return service.getTransaction(txnId);
- }
+    // =========================
+    // TRANSACTION STATUS
+    // =========================
+    @GetMapping("/status/{txnId}")
+    public ApiResponse<TransactionResponse> getTransaction(
+            @PathVariable String txnId) {
+
+        return service.getTransaction(txnId);
+    }
+
+    // =========================
+    // MINI STATEMENT
+    // =========================
+    @GetMapping("/mini/{accNo}")
+    public ApiResponse<List<TransactionResponse>> miniStatement(
+            @RequestHeader("Authorization") String header,
+            @PathVariable String accNo) {
+
+        return service.miniStatement(accNo, header.substring(7));
+    }
+
+    // =========================
+    // CUSTOM STATEMENT
+    // =========================
+    @GetMapping("/statement/{accNo}")
+    public ApiResponse<List<TransactionResponse>> statement(
+            @RequestHeader("Authorization") String header,
+            @PathVariable String accNo,
+            @RequestParam String start,
+            @RequestParam String end) {
+
+        return service.statement(
+                accNo,
+                LocalDateTime.parse(start),
+                LocalDateTime.parse(end),
+                header.substring(7)
+        );
+    }
+
+    // =========================
+    // LAST MONTH
+    // =========================
+    @GetMapping("/last-month/{accNo}")
+    public ApiResponse<List<TransactionResponse>> lastMonth(
+            @RequestHeader("Authorization") String header,
+            @PathVariable String accNo) {
+
+        return service.lastMonth(accNo, header.substring(7));
+    }
+
+    // =========================
+    // LAST 3 MONTHS
+    // =========================
+    @GetMapping("/last-3months/{accNo}")
+    public ApiResponse<List<TransactionResponse>> last3Months(
+            @RequestHeader("Authorization") String header,
+            @PathVariable String accNo) {
+
+        return service.last3Months(accNo, header.substring(7));
+    }
+
+    // =========================
+    // LAST 6 MONTHS
+    // =========================
+    @GetMapping("/last-6months/{accNo}")
+    public ApiResponse<List<TransactionResponse>> last6Months(
+            @RequestHeader("Authorization") String header,
+            @PathVariable String accNo) {
+
+        return service.last6Months(accNo, header.substring(7));
+    }
 }
