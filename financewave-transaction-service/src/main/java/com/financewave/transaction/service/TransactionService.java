@@ -1,5 +1,6 @@
 package com.financewave.transaction.service;
 
+import com.financewave.transaction.config.FeatureToggleConfig;
 import com.financewave.transaction.dto.*;
 import com.financewave.transaction.entity.AuditLog;
 import com.financewave.transaction.entity.Transaction;
@@ -28,6 +29,9 @@ public class TransactionService {
 
     @Autowired
     private JwtUtil jwtUtil;
+    
+    @Autowired
+    private FeatureToggleConfig featureToggle;
 
     // =========================
     // DEPOSIT
@@ -43,12 +47,17 @@ public class TransactionService {
                 throw new RuntimeException("Invalid or inactive account");
             }
 
+            // ✅ STEP 1: FRAUD CHECK (BEFORE MONEY)
+            //fraudCheck(req.getAccountNumber(), req.getAmount());
+
+            // ✅ STEP 2: ACTUAL TRANSACTION
             accountClient.deposit(req.getAccountNumber(), req.getAmount(), token);
 
             tx.setStatus("SUCCESS");
             repo.save(tx);
 
-            logAudit(getUsername(token), "DEPOSIT", "SUCCESS", "Deposit success");
+            logAudit(getUsername(token), "DEPOSIT", "SUCCESS",
+                    "Deposited " + req.getAmount());
 
             return buildResponse("Deposit completed successfully", tx);
 
@@ -77,6 +86,8 @@ public class TransactionService {
             if (!accountClient.validateAccount(req.getAccountNumber(), token)) {
                 throw new RuntimeException("Invalid account");
             }
+            
+            fraudCheck(req.getAccountNumber(), req.getAmount());
 
             accountClient.withdraw(req.getAccountNumber(), req.getAmount(), token);
 
@@ -114,6 +125,8 @@ public class TransactionService {
             if (req.getFromAccount().equals(req.getToAccount())) {
                 throw new RuntimeException("Cannot transfer to same account");
             }
+            
+            fraudCheck(req.getFromAccount(), req.getAmount());
 
             accountClient.withdraw(req.getFromAccount(), req.getAmount(), token);
             debited = true;
@@ -276,5 +289,24 @@ public class TransactionService {
                 "Transaction history fetched",
                 list
         );
+    }
+    
+    //=============Fraud Check==================
+    
+    private void fraudCheck(String accNo, double amount) {
+
+        if (!featureToggle.isFraudCheckEnabled()) return;
+
+        // ✅ Rule 1: Single txn limit
+        if (amount > 100000) {
+            throw new RuntimeException("Transaction blocked: exceeds single transaction limit");
+        }
+
+        // ✅ Rule 2: Daily debit limit ONLY
+        double todayTotal = repo.getTodayDebitTotal(accNo);
+
+        if ((todayTotal + amount) > 200000) {
+            throw new RuntimeException("Daily transaction limit exceeded");
+        }
     }
 }

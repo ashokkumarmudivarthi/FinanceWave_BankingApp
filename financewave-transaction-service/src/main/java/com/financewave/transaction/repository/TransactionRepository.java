@@ -2,6 +2,8 @@ package com.financewave.transaction.repository;
 
 import com.financewave.transaction.entity.Transaction;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -21,7 +23,10 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
             String from,
             String to
     );
-
-    // ✅ REQUIRED FOR STATUS API
     Optional<Transaction> findByTransactionId(String transactionId);
+    // ✅ REQUIRED FOR STATUS API
+    @Query("SELECT COALESCE(SUM(t.amount),0) FROM Transaction t " +
+    	       "WHERE t.fromAccount = :acc " +
+    	       "AND t.createdAt >= CURRENT_DATE")
+    	double getTodayDebitTotal(@Param("acc") String acc);
 }
