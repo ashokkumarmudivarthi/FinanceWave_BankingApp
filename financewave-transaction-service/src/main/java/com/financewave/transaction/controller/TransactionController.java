@@ -58,4 +58,13 @@ public class TransactionController {
 
         return service.history(accountNumber, header.substring(7));
     }
+ // =========================
+ // GET TRANSACTION STATUS
+ // =========================
+ @GetMapping("/status/{txnId}")
+ public ApiResponse<TransactionResponse> getTransaction(
+         @PathVariable String txnId) {
+
+     return service.getTransaction(txnId);
+ }
 }
