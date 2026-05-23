@@ -27,10 +27,19 @@ public class TransactionService {
 
         validateAmount(req.getAmount());
 
-        boolean isValid = accountClient.validateAccount(req.getAccountNumber(), token);
-
-        if (!isValid) {
+        if (!accountClient.validateAccount(req.getAccountNumber(), token)) {
             throw new RuntimeException("Invalid or inactive account");
+        }
+
+        // ✅ CALL ACCOUNT SERVICE
+        boolean success = accountClient.deposit(
+                req.getAccountNumber(),
+                req.getAmount(),
+                token
+        );
+
+        if (!success) {
+            throw new RuntimeException("Deposit failed");
         }
 
         Transaction tx = buildTransaction(
@@ -52,10 +61,19 @@ public class TransactionService {
 
         validateAmount(req.getAmount());
 
-        boolean isValid = accountClient.validateAccount(req.getAccountNumber(), token);
-
-        if (!isValid) {
+        if (!accountClient.validateAccount(req.getAccountNumber(), token)) {
             throw new RuntimeException("Invalid or inactive account");
+        }
+
+        // ✅ CALL ACCOUNT SERVICE
+        boolean success = accountClient.withdraw(
+                req.getAccountNumber(),
+                req.getAmount(),
+                token
+        );
+
+        if (!success) {
+            throw new RuntimeException("Insufficient balance or withdraw failed");
         }
 
         Transaction tx = buildTransaction(
@@ -71,7 +89,7 @@ public class TransactionService {
     }
 
     // =========================
-    // TRANSFER
+    // TRANSFER (WITH SAFE ROLLBACK)
     // =========================
     public ApiResponse<TransactionResponse> transfer(TransferRequest req, String token) {
 
@@ -81,13 +99,65 @@ public class TransactionService {
             throw new RuntimeException("Cannot transfer to same account");
         }
 
-        boolean fromValid = accountClient.validateAccount(req.getFromAccount(), token);
-        boolean toValid = accountClient.validateAccount(req.getToAccount(), token);
-
-        if (!fromValid || !toValid) {
+        if (!accountClient.validateAccount(req.getFromAccount(), token) ||
+            !accountClient.validateAccount(req.getToAccount(), token)) {
             throw new RuntimeException("Invalid or inactive account");
         }
 
+        boolean withdrawSuccess = false;
+
+        try {
+
+            // =========================
+            // STEP 1: WITHDRAW
+            // =========================
+            withdrawSuccess = accountClient.withdraw(
+                    req.getFromAccount(),
+                    req.getAmount(),
+                    token
+            );
+
+            if (!withdrawSuccess) {
+                throw new RuntimeException("Insufficient balance");
+            }
+
+            // =========================
+            // STEP 2: DEPOSIT
+            // =========================
+            boolean depositSuccess = accountClient.deposit(
+                    req.getToAccount(),
+                    req.getAmount(),
+                    token
+            );
+
+            if (!depositSuccess) {
+                throw new RuntimeException("Deposit failed");
+            }
+
+        } catch (Exception ex) {
+
+            // =========================
+            // ROLLBACK LOGIC
+            // =========================
+            if (withdrawSuccess) {
+                try {
+                    accountClient.deposit(
+                            req.getFromAccount(),
+                            req.getAmount(),
+                            token
+                    );
+                    System.out.println("Rollback SUCCESS");
+                } catch (Exception rollbackEx) {
+                    System.out.println("CRITICAL: Rollback FAILED");
+                }
+            }
+
+            throw new RuntimeException("Transaction failed. Amount reversed if debited.");
+        }
+
+        // =========================
+        // SAVE TRANSACTION ONLY AFTER SUCCESS
+        // =========================
         Transaction tx = buildTransaction(
                 req.getFromAccount(),
                 req.getToAccount(),
@@ -105,9 +175,7 @@ public class TransactionService {
     // =========================
     public ApiResponse<List<TransactionResponse>> history(String accNo, String token) {
 
-        boolean isValid = accountClient.validateAccount(accNo, token);
-
-        if (!isValid) {
+        if (!accountClient.validateAccount(accNo, token)) {
             throw new RuntimeException("Invalid account");
         }
 
@@ -122,9 +190,9 @@ public class TransactionService {
                 ))
                 .collect(Collectors.toList());
 
-        return new ApiResponse<List<TransactionResponse>>(
+        return new ApiResponse<>(
                 "SUCCESS",
-                "Transaction history fetched successfully",
+                "Transaction history fetched",
                 list
         );
     }
@@ -132,7 +200,6 @@ public class TransactionService {
     // =========================
     // COMMON METHODS
     // =========================
-
     private Transaction buildTransaction(String from, String to, double amount, String type) {
 
         Transaction tx = new Transaction();
@@ -149,17 +216,15 @@ public class TransactionService {
 
     private ApiResponse<TransactionResponse> buildResponse(String message, Transaction tx) {
 
-        TransactionResponse response = new TransactionResponse(
-                tx.getTransactionId(),
-                tx.getType(),
-                tx.getAmount(),
-                tx.getStatus()
-        );
-
-        return new ApiResponse<TransactionResponse>(
+        return new ApiResponse<>(
                 "SUCCESS",
                 message,
-                response
+                new TransactionResponse(
+                        tx.getTransactionId(),
+                        tx.getType(),
+                        tx.getAmount(),
+                        tx.getStatus()
+                )
         );
     }
 

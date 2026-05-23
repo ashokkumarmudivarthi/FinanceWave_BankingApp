@@ -7,6 +7,7 @@ import com.financewave.account.security.JwtUtil;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -52,6 +53,67 @@ public class AccountService {
     }
 
     // =========================
+    // VALIDATE ACCOUNT
+    // =========================
+    public boolean validateAccount(String accNo) {
+
+        Account acc = repo.findByAccountNumber(accNo)
+                .orElse(null);
+
+        return acc != null && "ACTIVE".equals(acc.getStatus());
+    }
+
+    // =========================
+    // DEPOSIT
+    // =========================
+    @Transactional
+    public ApiResponse<String> deposit(String accNo, double amount) {
+
+        if (amount <= 0) {
+            throw new RuntimeException("Amount must be greater than zero");
+        }
+
+        Account acc = repo.findByAccountNumber(accNo)
+                .orElseThrow(() -> new RuntimeException("Account not found"));
+
+        if (!"ACTIVE".equals(acc.getStatus())) {
+            throw new RuntimeException("Account is not active");
+        }
+
+        acc.setBalance(acc.getBalance() + amount);
+        repo.save(acc);
+
+        return new ApiResponse<>("SUCCESS", "Amount deposited successfully", null);
+    }
+
+    // =========================
+    // WITHDRAW
+    // =========================
+    @Transactional
+    public ApiResponse<String> withdraw(String accNo, double amount) {
+
+        if (amount <= 0) {
+            throw new RuntimeException("Amount must be greater than zero");
+        }
+
+        Account acc = repo.findByAccountNumber(accNo)
+                .orElseThrow(() -> new RuntimeException("Account not found"));
+
+        if (!"ACTIVE".equals(acc.getStatus())) {
+            throw new RuntimeException("Account is not active");
+        }
+
+        if (acc.getBalance() < amount) {
+            throw new RuntimeException("Insufficient balance");
+        }
+
+        acc.setBalance(acc.getBalance() - amount);
+        repo.save(acc);
+
+        return new ApiResponse<>("SUCCESS", "Amount withdrawn successfully", null);
+    }
+
+    // =========================
     // MY ACCOUNTS
     // =========================
     public ApiResponse<List<AccountResponse>> myAccounts(String token) {
@@ -71,7 +133,7 @@ public class AccountService {
     }
 
     // =========================
-    // GET ACCOUNT DETAILS
+    // GET ACCOUNT
     // =========================
     public ApiResponse<AccountDetailsResponse> getAccount(String token, String accNo) {
 
@@ -95,7 +157,7 @@ public class AccountService {
     }
 
     // =========================
-    // ADMIN - GET ALL ACCOUNTS
+    // GET ALL ACCOUNTS
     // =========================
     public ApiResponse<List<AccountDetailsResponse>> getAllAccounts() {
 
@@ -113,7 +175,7 @@ public class AccountService {
     }
 
     // =========================
-    // BLOCK ACCOUNT
+    // BLOCK
     // =========================
     public ApiResponse<String> block(String accNo) {
 
@@ -127,7 +189,7 @@ public class AccountService {
     }
 
     // =========================
-    // UNBLOCK ACCOUNT
+    // UNBLOCK
     // =========================
     public ApiResponse<String> unblock(String accNo) {
 
@@ -141,7 +203,7 @@ public class AccountService {
     }
 
     // =========================
-    // CLOSE ACCOUNT
+    // CLOSE
     // =========================
     public ApiResponse<String> close(String accNo) {
 
@@ -156,16 +218,5 @@ public class AccountService {
         repo.save(acc);
 
         return new ApiResponse<>("SUCCESS", "Account closed", null);
-    }
-
-    // =========================
-    // VALIDATE ACCOUNT (INTERNAL)
-    // =========================
-    public boolean validateAccount(String accNo) {
-
-        Account acc = repo.findByAccountNumber(accNo)
-                .orElseThrow(() -> new RuntimeException("Account not found"));
-
-        return "ACTIVE".equals(acc.getStatus());
     }
 }
