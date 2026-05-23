@@ -39,6 +39,7 @@ public class TransactionService {
                 throw new RuntimeException("Invalid or inactive account");
             }
 
+            // 🔥 WILL THROW if failed
             accountClient.deposit(req.getAccountNumber(), req.getAmount(), token);
 
             tx.setStatus("SUCCESS");
@@ -75,15 +76,8 @@ public class TransactionService {
                 throw new RuntimeException("Invalid or inactive account");
             }
 
-            boolean success = accountClient.withdraw(
-                    req.getAccountNumber(),
-                    req.getAmount(),
-                    token
-            );
-
-            if (!success) {
-                throw new RuntimeException("Insufficient balance");
-            }
+            // 🔥 FIX: NO BOOLEAN
+            accountClient.withdraw(req.getAccountNumber(), req.getAmount(), token);
 
             tx.setStatus("SUCCESS");
             repo.save(tx);
@@ -131,33 +125,20 @@ public class TransactionService {
                 throw new RuntimeException("Invalid or inactive account");
             }
 
-            // STEP 1: WITHDRAW
-            boolean withdrawSuccess = accountClient.withdraw(
-                    req.getFromAccount(),
-                    req.getAmount(),
-                    token
-            );
-
-            if (!withdrawSuccess) {
-                throw new RuntimeException("Insufficient balance");
-            }
-
+            // STEP 1
+            accountClient.withdraw(req.getFromAccount(), req.getAmount(), token);
             debited = true;
 
-            // STEP 2: DEPOSIT
-            accountClient.deposit(
-                    req.getToAccount(),
-                    req.getAmount(),
-                    token
-            );
+            // STEP 2
+            accountClient.deposit(req.getToAccount(), req.getAmount(), token);
 
             tx.setStatus("SUCCESS");
             repo.save(tx);
 
             logAudit("USER", "TRANSFER", "SUCCESS",
                     "Transferred " + req.getAmount() +
-                            " from " + req.getFromAccount() +
-                            " to " + req.getToAccount());
+                    " from " + req.getFromAccount() +
+                    " to " + req.getToAccount());
 
             return buildResponse("Transfer completed successfully", tx);
 
@@ -203,26 +184,6 @@ public class TransactionService {
                 .collect(Collectors.toList());
 
         return new ApiResponse<>("SUCCESS", "Transaction history fetched", list);
-    }
-
-    // =========================
-    // GET TRANSACTION BY ID
-    // =========================
-    public ApiResponse<TransactionResponse> getTransaction(String txnId) {
-
-        Transaction tx = repo.findByTransactionId(txnId)
-                .orElseThrow(() -> new RuntimeException("Transaction not found"));
-
-        return new ApiResponse<>(
-                "SUCCESS",
-                "Transaction fetched successfully",
-                new TransactionResponse(
-                        tx.getTransactionId(),
-                        tx.getType(),
-                        tx.getAmount(),
-                        tx.getStatus()
-                )
-        );
     }
 
     // =========================
