@@ -72,29 +72,28 @@ public class AccountClient {
         }
     }*/
     
-    public boolean deposit(String accNo, double amount, String token) {
+    public void deposit(String accNo, double amount, String token) {
 
-        try {
-            String url = baseUrl + "/accounts/deposit/" + accNo + "?amount=" + amount;
+        String url = baseUrl + "/accounts/deposit/" + accNo + "?amount=" + amount;
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("Authorization", "Bearer " + token);
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer " + token);
 
-            HttpEntity<String> entity = new HttpEntity<>(headers);
+        HttpEntity<String> entity = new HttpEntity<>(headers);
 
-            ResponseEntity<ApiResponse> response = rest.exchange(
-                    url,
-                    HttpMethod.PUT,
-                    entity,
-                    ApiResponse.class
-            );
+        ResponseEntity<ApiResponse> response = rest.exchange(
+                url,
+                HttpMethod.PUT,
+                entity,
+                ApiResponse.class
+        );
 
-            return response.getBody() != null &&
-                   "SUCCESS".equals(response.getBody().getStatus());
+        if (response.getBody() == null) {
+            throw new RuntimeException("Empty response from account service");
+        }
 
-        } catch (Exception e) {
-            System.out.println("Deposit failed: " + e.getMessage());
-            return false;
+        if (!"SUCCESS".equals(response.getBody().getStatus())) {
+            throw new RuntimeException(response.getBody().getMessage());
         }
     }
 
@@ -126,29 +125,28 @@ public class AccountClient {
             return false;
         }
     }*/
-    public boolean withdraw(String accNo, double amount, String token) {
+    public void withdraw(String accNo, double amount, String token) {
 
-        try {
-            String url = baseUrl + "/accounts/withdraw/" + accNo + "?amount=" + amount;
+        String url = baseUrl + "/accounts/withdraw/" + accNo + "?amount=" + amount;
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("Authorization", "Bearer " + token);
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer " + token);
 
-            HttpEntity<String> entity = new HttpEntity<>(headers);
+        HttpEntity<String> entity = new HttpEntity<>(headers);
 
-            ResponseEntity<ApiResponse> response = rest.exchange(
-                    url,
-                    HttpMethod.PUT,
-                    entity,
-                    ApiResponse.class
-            );
+        ResponseEntity<ApiResponse> response = rest.exchange(
+                url,
+                HttpMethod.PUT,
+                entity,
+                ApiResponse.class
+        );
 
-            return response.getBody() != null &&
-                   "SUCCESS".equals(response.getBody().getStatus());
+        if (response.getBody() == null) {
+            throw new RuntimeException("Empty response from account service");
+        }
 
-        } catch (Exception e) {
-            System.out.println("Withdraw failed: " + e.getMessage());
-            return false;
+        if (!"SUCCESS".equals(response.getBody().getStatus())) {
+            throw new RuntimeException(response.getBody().getMessage());
         }
     }
 }
