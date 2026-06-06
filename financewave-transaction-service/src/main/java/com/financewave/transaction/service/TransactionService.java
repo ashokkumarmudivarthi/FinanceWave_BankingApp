@@ -1,11 +1,10 @@
 package com.financewave.transaction.service;
 
 import com.financewave.transaction.client.BeneficiaryClient;
+import com.financewave.transaction.client.UpiClient;
 import com.financewave.transaction.config.FeatureToggleConfig;
 import com.financewave.transaction.dto.*;
-import com.financewave.transaction.entity.AuditLog;
 import com.financewave.transaction.entity.Transaction;
-import com.financewave.transaction.repository.AuditLogRepository;
 import com.financewave.transaction.repository.TransactionRepository;
 import com.financewave.transaction.security.JwtUtil;
 
@@ -26,9 +25,6 @@ public class TransactionService {
     private AccountClient accountClient;
 
     @Autowired
-    private AuditLogRepository auditRepo;
-
-    @Autowired
     private JwtUtil jwtUtil;
 
     @Autowired
@@ -36,6 +32,9 @@ public class TransactionService {
 
     @Autowired
     private BeneficiaryClient beneficiaryClient;
+
+    @Autowired
+    private UpiClient upiClient;
 
     // =========================
     // DEPOSIT
@@ -59,11 +58,7 @@ public class TransactionService {
             return buildResponse("Deposit success", tx);
 
         } catch (Exception ex) {
-            tx.setStatus("FAILED");
-            tx.setFailureReason(ex.getMessage());
-            repo.save(tx);
-
-            throw new RuntimeException(ex.getMessage());
+            return fail(tx, ex);
         }
     }
 
@@ -91,18 +86,17 @@ public class TransactionService {
             return buildResponse("Withdraw success", tx);
 
         } catch (Exception ex) {
-            tx.setStatus("FAILED");
-            tx.setFailureReason(ex.getMessage());
-            repo.save(tx);
-
-            throw new RuntimeException(ex.getMessage());
+            return fail(tx, ex);
         }
     }
 
     // =========================
-    // TRANSFER (FINAL FIXED)
+    // TRANSFER (COMMON CORE)
     // =========================
-    public ApiResponse<TransactionResponse> transfer(TransferRequest req, String token) {
+    public ApiResponse<TransactionResponse> transfer(
+            TransferRequest req,
+            String token,
+            boolean skipBeneficiaryCheck) {
 
         Transaction tx = buildTransaction(
                 req.getFromAccount(),
@@ -121,10 +115,12 @@ public class TransactionService {
             }
 
             // ✅ BENEFICIARY VALIDATION
-            boolean isValid = beneficiaryClient.validate(token, req.getToAccount());
+            if (!skipBeneficiaryCheck) {
+                boolean isValid = beneficiaryClient.validate(token, req.getToAccount());
 
-            if (!isValid) {
-                throw new RuntimeException("Beneficiary not approved");
+                if (!isValid) {
+                    throw new RuntimeException("Beneficiary not approved");
+                }
             }
 
             // ✅ SOURCE ACCOUNT
@@ -132,7 +128,7 @@ public class TransactionService {
                 throw new RuntimeException("Invalid source account");
             }
 
-            // ✅ INTERNAL / EXTERNAL
+            // ✅ INTERNAL CHECK
             boolean isInternal = req.getToAccount().startsWith("FW");
 
             if (isInternal) {
@@ -143,11 +139,11 @@ public class TransactionService {
 
             fraudCheck(req.getFromAccount(), req.getAmount());
 
-            // STEP 1
+            // STEP 1: DEBIT
             accountClient.withdraw(req.getFromAccount(), req.getAmount(), token);
             debited = true;
 
-            // STEP 2
+            // STEP 2: CREDIT (only if internal)
             if (isInternal) {
                 accountClient.deposit(req.getToAccount(), req.getAmount(), token);
             }
@@ -159,17 +155,51 @@ public class TransactionService {
 
         } catch (Exception ex) {
 
+            // rollback
             if (debited) {
                 try {
                     accountClient.deposit(req.getFromAccount(), req.getAmount(), token);
                 } catch (Exception ignore) {}
             }
 
-            tx.setStatus("FAILED");
-            tx.setFailureReason(ex.getMessage());
-            repo.save(tx);
+            return fail(tx, ex);
+        }
+    }
 
-            throw new RuntimeException("Transfer failed: " + ex.getMessage());
+    // =========================
+    // NORMAL TRANSFER ENTRY
+    // =========================
+    public ApiResponse<TransactionResponse> transfer(TransferRequest req, String token) {
+        return transfer(req, token, false);
+    }
+
+    // =========================
+    // UPI TRANSFER
+    // =========================
+    public ApiResponse<TransactionResponse> upiTransfer(
+            String token,
+            String fromAccount,
+            String vpa,
+            double amount) {
+
+        try {
+            boolean isValid = upiClient.validateVpa(vpa, token);
+
+            if (!isValid) {
+                throw new RuntimeException("Invalid VPA");
+            }
+
+            String toAccount = upiClient.getAccountFromVpa(vpa, token);
+
+            TransferRequest req = new TransferRequest();
+            req.setFromAccount(fromAccount);
+            req.setToAccount(toAccount);
+            req.setAmount(amount);
+
+            return transfer(req, token, true); // 🔥 skip beneficiary
+
+        } catch (Exception ex) {
+            throw new RuntimeException("UPI failed: " + ex.getMessage());
         }
     }
 
@@ -188,7 +218,7 @@ public class TransactionService {
     }
 
     // =========================
-    // MINI
+    // MINI STATEMENT
     // =========================
     public ApiResponse<List<TransactionResponse>> miniStatement(String accNo, String token) {
 
@@ -216,7 +246,7 @@ public class TransactionService {
                 .map(this::map)
                 .collect(Collectors.toList());
 
-        return new ApiResponse<>("SUCCESS", "Statement", list);
+        return new ApiResponse<>("SUCCESS", "Statement fetched", list);
     }
 
     public ApiResponse<List<TransactionResponse>> lastMonth(String accNo, String token) {
@@ -229,6 +259,17 @@ public class TransactionService {
 
     public ApiResponse<List<TransactionResponse>> last6Months(String accNo, String token) {
         return statement(accNo, LocalDateTime.now().minusMonths(6), LocalDateTime.now(), token);
+    }
+
+    // =========================
+    // GET STATUS
+    // =========================
+    public ApiResponse<TransactionResponse> getTransaction(String txnId) {
+
+        Transaction tx = repo.findByTransactionId(txnId)
+                .orElseThrow(() -> new RuntimeException("Transaction not found"));
+
+        return buildResponse("Transaction fetched", tx);
     }
 
     // =========================
@@ -258,6 +299,13 @@ public class TransactionService {
         return new ApiResponse<>("SUCCESS", msg, map(tx));
     }
 
+    private ApiResponse<TransactionResponse> fail(Transaction tx, Exception ex) {
+        tx.setStatus("FAILED");
+        tx.setFailureReason(ex.getMessage());
+        repo.save(tx);
+        throw new RuntimeException(ex.getMessage());
+    }
+
     private void validateAmount(double amount) {
         if (amount <= 0) throw new RuntimeException("Invalid amount");
     }
@@ -266,7 +314,6 @@ public class TransactionService {
 
         if (!featureToggle.isFraudCheckEnabled()) return;
 
-        // ✅ calculate today's range
         LocalDateTime start = LocalDateTime.now().toLocalDate().atStartOfDay();
         LocalDateTime end = start.plusDays(1);
 
@@ -280,14 +327,4 @@ public class TransactionService {
             throw new RuntimeException("Exceeds per transaction limit");
         }
     }
- // =========================
- // GET TRANSACTION STATUS
- // =========================
- public ApiResponse<TransactionResponse> getTransaction(String txnId) {
-
-     Transaction tx = repo.findByTransactionId(txnId)
-             .orElseThrow(() -> new RuntimeException("Transaction not found"));
-
-     return buildResponse("Transaction fetched", tx);
- }
 }

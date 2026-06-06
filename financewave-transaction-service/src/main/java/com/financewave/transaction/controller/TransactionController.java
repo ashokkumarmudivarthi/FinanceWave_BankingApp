@@ -131,4 +131,18 @@ public class TransactionController {
 
         return service.last6Months(accNo, header.substring(7));
     }
+    @PostMapping("/upi")
+    public ApiResponse<TransactionResponse> upi(
+            @RequestHeader("Authorization") String header,
+            @RequestParam String fromAccount,
+            @RequestParam String vpa,
+            @RequestParam double amount) {
+
+        return service.upiTransfer(
+                header.substring(7),
+                fromAccount,
+                vpa,
+                amount
+        );
+    }
 }
