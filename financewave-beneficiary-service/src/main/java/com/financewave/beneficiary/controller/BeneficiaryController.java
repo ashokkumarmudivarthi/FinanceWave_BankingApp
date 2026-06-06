@@ -14,7 +14,7 @@ public class BeneficiaryController {
     private BeneficiaryService service;
 
     // =========================
-    // CUSTOMER: ADD
+    // ADD
     // =========================
     @PostMapping("/add")
     public ApiResponse<BeneficiaryResponse> add(
@@ -25,7 +25,7 @@ public class BeneficiaryController {
     }
 
     // =========================
-    // CUSTOMER: VIEW OWN
+    // MY LIST
     // =========================
     @GetMapping("/my")
     public ApiResponse<?> my(
@@ -35,7 +35,7 @@ public class BeneficiaryController {
     }
 
     // =========================
-    // CUSTOMER: DELETE
+    // DELETE
     // =========================
     @DeleteMapping("/{id}")
     public ApiResponse<String> delete(
@@ -46,7 +46,7 @@ public class BeneficiaryController {
     }
 
     // =========================
-    // ADMIN: VIEW PENDING
+    // ADMIN: PENDING
     // =========================
     @GetMapping("/pending")
     public ApiResponse<?> getPending(
@@ -86,5 +86,16 @@ public class BeneficiaryController {
             @RequestHeader("Authorization") String header) {
 
         return service.getAll(header.substring(7));
+    }
+
+    // =========================
+    // VALIDATE (FOR TRANSACTION SERVICE)
+    // =========================
+    @GetMapping("/validate")
+    public boolean validate(
+            @RequestHeader("Authorization") String header,
+            @RequestParam String account) {
+
+        return service.validate(header.substring(7), account);
     }
 }

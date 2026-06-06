@@ -25,8 +25,14 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     );
     Optional<Transaction> findByTransactionId(String transactionId);
     // ✅ REQUIRED FOR STATUS API
-    @Query("SELECT COALESCE(SUM(t.amount),0) FROM Transaction t " +
+    @Query("SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t " +
     	       "WHERE t.fromAccount = :acc " +
-    	       "AND t.createdAt >= CURRENT_DATE")
-    	double getTodayDebitTotal(@Param("acc") String acc);
+    	       "AND t.type = 'WITHDRAW' " +
+    	       "AND t.createdAt >= :startOfDay " +
+    	       "AND t.createdAt < :endOfDay")
+    	double getTodayDebitTotal(
+    	        @Param("acc") String acc,
+    	        @Param("startOfDay") LocalDateTime startOfDay,
+    	        @Param("endOfDay") LocalDateTime endOfDay
+    	);
 }

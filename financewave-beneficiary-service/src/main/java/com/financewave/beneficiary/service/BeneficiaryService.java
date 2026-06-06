@@ -160,6 +160,22 @@ public class BeneficiaryService {
     }
 
     // =========================
+    // VALIDATE (IMPORTANT FOR TRANSACTION)
+    // =========================
+    public boolean validate(String token, String account) {
+
+        String username = jwtUtil.extractUsername(token).toLowerCase();
+
+        System.out.println("VALIDATE USER: " + username);
+        System.out.println("VALIDATE ACCOUNT: " + account);
+
+        return repo.existsByUsernameIgnoreCaseAndBeneficiaryAccountNumberAndStatus(
+                username,
+                account,
+                "ACTIVE"
+        );
+    }
+    // =========================
     // ROLE CHECK
     // =========================
     private void checkAdmin(String token) {
